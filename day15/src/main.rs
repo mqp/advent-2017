@@ -1,26 +1,33 @@
-const MASK: u64 = 0b1111_1111_1111_1111;
-
-fn step(factor: u64, x: u64) -> u64 {
-    (x * factor) % 2147483647
+#[derive(Debug, Clone)]
+struct LCG {
+    factor: u64,
+    current: u64
 }
 
+impl LCG {
+    fn new(factor: u64, seed: u64) -> Self { 
+        Self { factor, current: seed }
+    }
+}
+
+impl Iterator for LCG {
+    type Item = u64;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.current = (self.current * self.factor) % 2147483647;
+        Some(self.current)
+    }
+}
+
+const MASK: u64 = 0b1111_1111_1111_1111;
+
 fn main() {
-    let af = 16807;
-    let bf = 48271;
-    let mut a = 679;
-    let mut b = 771;
+    let a = LCG::new(16807, 679);
+    let b = LCG::new(48271, 771);
+    let mut xs = a.filter(|x| x % 4 == 0);
+    let mut ys = b.filter(|y| y % 8 == 0);
     let mut matches = 0;
-    let rounds = 5000000;
-    for _ in 0..rounds {
-        a = step(af, a);
-        b = step(bf, b);
-        while a % 4 != 0 {
-            a = step(af, a);
-        }
-        while b % 8 != 0 {
-            b = step(bf, b);
-        }
-        if a & MASK == b & MASK {
+    for _ in 0..5000000 {
+        if xs.next().unwrap() & MASK == ys.next().unwrap() & MASK {
             matches += 1;
         }
     }
