@@ -25,8 +25,8 @@ impl<T> Grid<T> {
         (self.data.len() as f64).sqrt() as usize // the grid is always square
     }
 
-    pub fn map<F, U>(&self, func: F) -> Grid<U> where F: Fn(&T) -> U {
-        Grid::new(self.data.iter().map(func).collect())
+    pub fn map<F, U>(self, func: F) -> Grid<U> where F: Fn(T) -> U {
+        Grid::new(self.data.into_iter().map(func).collect())
     }
 }
 
@@ -63,7 +63,7 @@ impl<T> Grid<T> where T: Copy {
         Grid::new(data)
     }
 
-    pub fn merge(grids: Grid<Self>) -> Self {
+    pub fn merge(grids: Grid<&Self>) -> Self {
         let sz = grids.size();
         let subgrid_size = grids.get(0, 0).size();
         let mut data = Vec::with_capacity(sz * sz * subgrid_size * subgrid_size);
@@ -121,21 +121,21 @@ fn count(grid: &Grid<bool>) -> u32 {
     count
 }
 
-fn apply_rule(rules: &HashMap<Grid<bool>, Grid<bool>>, input: &Grid<bool>) -> Grid<bool> {
-    let r0 = input.clone();
-    let r90 = r0.rotate();
-    let r180 = r90.rotate();
-    let r270 = r180.rotate();
-    let r0x = r0.reflect();
-    let r90x = r90.reflect();
-    let r180x = r180.reflect();
-    let r270x = r270.reflect();
-    for candidate in &[r0, r0x, r90, r90x, r180, r180x, r270, r270x] {
-        if let Some(output) = rules.get(candidate) {
-            return output.clone();
+fn build_mapping(rules: &Vec<(Grid<bool>, Grid<bool>)>) -> HashMap<Grid<bool>, &Grid<bool>>{
+    let mut mapping = HashMap::new();
+    for &(ref precedent, ref antecedent) in rules {
+        let mut curr = precedent.clone();
+        let mut currx = curr.reflect();
+        mapping.insert(curr.clone(), antecedent);
+        mapping.insert(currx.clone(), antecedent);
+        for _ in 0..3 {
+            curr = curr.rotate();
+            currx = currx.rotate();
+            mapping.insert(curr.clone(), antecedent);
+            mapping.insert(currx.clone(), antecedent);
         }
     }
-    panic!("No rule found matching grid!");
+    mapping
 }
 
 fn parse_rule(s: &str) -> Result<(Grid<bool>, Grid<bool>), Box<Error>> {
@@ -148,11 +148,12 @@ fn parse_rule(s: &str) -> Result<(Grid<bool>, Grid<bool>), Box<Error>> {
 fn main() {
     let reader = BufReader::new(File::open("input").expect("Couldn't read input file."));
     let lines = reader.lines().map(|x| x.expect("Couldn't read line."));
-    let rules: HashMap<Grid<bool>, Grid<bool>> = lines.map(|x| parse_rule(&x).expect("Couldn't parse rule.")).collect();
+    let rules: Vec<_> = lines.map(|x| parse_rule(&x).expect("Couldn't parse rule.")).collect();
+    let patterns = build_mapping(&rules);
     let mut curr: Grid<bool> = ".#./..#/###".parse().unwrap();
     for _ in 0..18 {
         let curr_subgrids = curr.subdivide();
-        let next_subgrids = curr_subgrids.map(|sg| apply_rule(&rules, &sg));
+        let next_subgrids = curr_subgrids.map(|sg| *patterns.get(&sg).expect("No rule found matching grid!"));
         curr = Grid::merge(next_subgrids);
     }
     println!("{}", count(&curr));
